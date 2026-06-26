@@ -16,6 +16,7 @@ class IldaCropperGUI:
         
         self.setup_styles()
         self.create_widgets()
+        self.update_mode_ui()
         
     def setup_styles(self):
         # Configure a dark/modern theme
@@ -97,13 +98,22 @@ class IldaCropperGUI:
         self.r_discard.grid(row=0, column=1, sticky=tk.W, pady=5)
         
         self.r_squash = ttk.Radiobutton(
-            settings_frame, 
-            text="Squash (scale vertically to fit)", 
-            value="squash", 
+            settings_frame,
+            text="Squash (scale vertically to fit)",
+            value="squash",
             variable=self.mode_var,
             command=self.update_mode_ui
         )
         self.r_squash.grid(row=0, column=2, sticky=tk.W, pady=5, padx=15)
+
+        self.r_time = ttk.Radiobutton(
+            settings_frame,
+            text="Set duration only (no cropping)",
+            value="time",
+            variable=self.mode_var,
+            command=self.update_mode_ui
+        )
+        self.r_time.grid(row=0, column=3, sticky=tk.W, pady=5, padx=15)
         
         # Ymin
         ymin_label = ttk.Label(settings_frame, text="Min Y (0 is middle):")
@@ -113,8 +123,8 @@ class IldaCropperGUI:
         self.ymin_entry = ttk.Entry(settings_frame, textvariable=self.ymin_var, width=10)
         self.ymin_entry.grid(row=1, column=1, sticky=tk.W, pady=5)
         
-        ymin_scale = ttk.Scale(settings_frame, from_=-32768, to=32767, variable=self.ymin_var, orient=tk.HORIZONTAL, length=200)
-        ymin_scale.grid(row=1, column=2, sticky=tk.W, pady=5, padx=15)
+        self.ymin_scale = ttk.Scale(settings_frame, from_=-32768, to=32767, variable=self.ymin_var, orient=tk.HORIZONTAL, length=200)
+        self.ymin_scale.grid(row=1, column=2, sticky=tk.W, pady=5, padx=15)
         
         # Ymax
         ymax_label = ttk.Label(settings_frame, text="Max Y (safety ceiling):")
@@ -124,18 +134,61 @@ class IldaCropperGUI:
         self.ymax_entry = ttk.Entry(settings_frame, textvariable=self.ymax_var, width=10)
         self.ymax_entry.grid(row=2, column=1, sticky=tk.W, pady=5)
         
-        ymax_scale = ttk.Scale(settings_frame, from_=-32768, to=32767, variable=self.ymax_var, orient=tk.HORIZONTAL, length=200)
-        ymax_scale.grid(row=2, column=2, sticky=tk.W, pady=5, padx=15)
+        self.ymax_scale = ttk.Scale(settings_frame, from_=-32768, to=32767, variable=self.ymax_var, orient=tk.HORIZONTAL, length=200)
+        self.ymax_scale.grid(row=2, column=2, sticky=tk.W, pady=5, padx=15)
         
         # Empty frame strategy (only applies to discard mode)
         self.use_dummy_var = tk.BooleanVar(value=True)
         self.dummy_chk = ttk.Checkbutton(
-            settings_frame, 
-            text="Preserve animation timing (insert blanked point for empty frames)", 
+            settings_frame,
+            text="Preserve animation timing (insert blanked point for empty frames)",
             variable=self.use_dummy_var
         )
-        self.dummy_chk.grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=10)
+        self.dummy_chk.grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=(10, 2))
+
+        self.blank_gaps_var = tk.BooleanVar(value=True)
+        self.blank_gaps_chk = ttk.Checkbutton(
+            settings_frame,
+            text="Blank gaps (don't draw a line across removed points)",
+            variable=self.blank_gaps_var
+        )
+        self.blank_gaps_chk.grid(row=4, column=0, columnspan=3, sticky=tk.W, pady=(2, 10))
         
+        # Playback duration frame
+        dur_frame = ttk.LabelFrame(main_frame, text=" Playback Duration ", padding=10)
+        dur_frame.pack(fill=tk.X, pady=(0, 15))
+
+        self.duration_var = tk.BooleanVar(value=False)
+        self.dur_chk = ttk.Checkbutton(
+            dur_frame,
+            text="Set every file to run for:",
+            variable=self.duration_var,
+            command=self.update_mode_ui
+        )
+        self.dur_chk.grid(row=0, column=0, sticky=tk.W, pady=5)
+
+        self.seconds_var = tk.DoubleVar(value=10.0)
+        self.seconds_entry = ttk.Entry(dur_frame, textvariable=self.seconds_var, width=8)
+        self.seconds_entry.grid(row=0, column=1, sticky=tk.W, pady=5, padx=(10, 4))
+        ttk.Label(dur_frame, text="seconds").grid(row=0, column=2, sticky=tk.W, pady=5)
+
+        ttk.Label(dur_frame, text="Scan rate (kpps, match your .prg):").grid(row=1, column=0, sticky=tk.W, pady=5)
+        self.scan_rate_var = tk.DoubleVar(value=30.0)
+        self.scan_rate_entry = ttk.Entry(dur_frame, textvariable=self.scan_rate_var, width=8)
+        self.scan_rate_entry.grid(row=1, column=1, sticky=tk.W, pady=5, padx=(10, 4))
+
+        # Direction: lengthen short files, trim long files, or both
+        self.extend_dir_var = tk.BooleanVar(value=True)
+        self.trim_dir_var = tk.BooleanVar(value=True)
+        self.extend_chk = ttk.Checkbutton(
+            dur_frame, text="Lengthen files shorter than the target",
+            variable=self.extend_dir_var, command=self.update_mode_ui)
+        self.extend_chk.grid(row=2, column=0, columnspan=3, sticky=tk.W, pady=(8, 2))
+        self.trim_chk = ttk.Checkbutton(
+            dur_frame, text="Trim files longer than the target",
+            variable=self.trim_dir_var, command=self.update_mode_ui)
+        self.trim_chk.grid(row=3, column=0, columnspan=3, sticky=tk.W, pady=2)
+
         # Output directory options
         out_frame = ttk.LabelFrame(main_frame, text=" Output Location ", padding=10)
         out_frame.pack(fill=tk.X, pady=(0, 15))
@@ -213,10 +266,32 @@ class IldaCropperGUI:
             self.out_dir_btn.config(state=tk.DISABLED)
             
     def update_mode_ui(self):
-        if self.mode_var.get() == "squash":
-            self.dummy_chk.config(state=tk.DISABLED)
+        mode = self.mode_var.get()
+        is_time = (mode == "time")
+
+        # Cropping controls are irrelevant in duration-only mode
+        crop_state = tk.DISABLED if is_time else tk.NORMAL
+        for w in (self.ymin_entry, self.ymax_entry, self.ymin_scale, self.ymax_scale):
+            w.config(state=crop_state)
+
+        # Empty-frame dummy and gap-blanking only apply to discard mode
+        discard_state = tk.NORMAL if mode == "discard" else tk.DISABLED
+        self.dummy_chk.config(state=discard_state)
+        self.blank_gaps_chk.config(state=discard_state)
+
+        # Duration is forced on (and locked) in time mode, otherwise optional via the checkbox
+        if is_time:
+            self.duration_var.set(True)
+            self.dur_chk.config(state=tk.DISABLED)
         else:
-            self.dummy_chk.config(state=tk.NORMAL)
+            self.dur_chk.config(state=tk.NORMAL)
+
+        dur_active = self.duration_var.get() or is_time
+        dur_state = tk.NORMAL if dur_active else tk.DISABLED
+        self.seconds_entry.config(state=dur_state)
+        self.scan_rate_entry.config(state=dur_state)
+        self.extend_chk.config(state=dur_state)
+        self.trim_chk.config(state=dur_state)
             
     def run_processing(self):
         if not self.input_files:
@@ -225,13 +300,37 @@ class IldaCropperGUI:
             
         ymin = self.ymin_var.get()
         ymax = self.ymax_var.get()
-        
-        if ymin > ymax:
+        mode = self.mode_var.get()
+
+        if mode != "time" and ymin > ymax:
             messagebox.showerror("Invalid Range", "Minimum Y value cannot be greater than Maximum Y value.")
             return
-            
-        mode = self.mode_var.get()
+
+        # Duration settings (forced on in time mode, optional otherwise)
+        use_duration = self.duration_var.get() or mode == "time"
+        extend_seconds = None
+        scan_rate_kpps = 30.0
+        allow_extend = True
+        allow_trim = True
+        if use_duration:
+            try:
+                extend_seconds = float(self.seconds_var.get())
+                scan_rate_kpps = float(self.scan_rate_var.get())
+            except (tk.TclError, ValueError):
+                messagebox.showerror("Invalid Duration", "Target seconds and scan rate must be numbers.")
+                return
+            if extend_seconds <= 0 or scan_rate_kpps <= 0:
+                messagebox.showerror("Invalid Duration", "Target seconds and scan rate must be greater than zero.")
+                return
+            allow_extend = self.extend_dir_var.get()
+            allow_trim = self.trim_dir_var.get()
+            if not (allow_extend or allow_trim):
+                messagebox.showerror("Invalid Duration",
+                                     "Select at least one of 'Lengthen' or 'Trim' for the duration.")
+                return
+
         use_dummy = self.use_dummy_var.get()
+        blank_gaps = self.blank_gaps_var.get()
         out_type = self.out_type_var.get()
         
         if out_type == "custom" and not self.output_directory:
@@ -253,7 +352,9 @@ class IldaCropperGUI:
                 self.status_lbl.config(text=f"Processing: {os.path.basename(file)}...")
                 self.root.update()
                 
-                process_ilda(file, outfile, ymin, ymax, use_dummy, mode)
+                process_ilda(file, outfile, ymin, ymax, use_dummy, mode,
+                             target_seconds=extend_seconds, scan_rate_kpps=scan_rate_kpps,
+                             allow_extend=allow_extend, allow_trim=allow_trim, blank_gaps=blank_gaps)
                 success_count += 1
             except Exception as e:
                 messagebox.showerror("Error Processing File", f"Could not process {os.path.basename(file)}:\n{str(e)}")
