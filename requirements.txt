@@ -1,0 +1,8 @@
+# No external pip dependencies are required.
+# All modules (struct, argparse, tkinter) are part of the Python Standard Library.
+#
+# Note for Linux users: 
+# If tkinter is missing from your system Python, install it via your package manager:
+#
+#   sudo apt-get install python3-tk
+#
