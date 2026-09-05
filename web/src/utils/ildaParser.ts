@@ -466,3 +466,90 @@ export function processIldaFile(parsed: ParsedIldaFile, options: ProcessOptions)
 
   return resultBuffer;
 }
+
+// Transform a single frame in-memory for instant visual preview without binary serialization
+export function transformFrameForPreview(
+  frame: IldaFrame,
+  options: ProcessOptions,
+  globalMinY: number,
+  globalMaxY: number
+): IldaFrame {
+  const { mode, yMin, yMax, preserveAnimationTiming, blankGaps } = options;
+  const { formatCode, pointCount } = frame.header;
+
+  if (formatCode === 2 || pointCount === 0) {
+    return frame;
+  }
+
+  const processedPoints: IldaPoint[] = [];
+  let gapSinceLastKept = false;
+
+  for (let i = 0; i < frame.points.length; i++) {
+    const pt = frame.points[i];
+
+    if (mode === 'squash') {
+      let newY = 0;
+      if (globalMaxY > globalMinY) {
+        const scale = (yMax - yMin) / (globalMaxY - globalMinY);
+        newY = Math.round(yMin + (pt.y - globalMinY) * scale);
+      } else {
+        newY = Math.round((yMin + yMax) / 2);
+      }
+
+      processedPoints.push({
+        ...pt,
+        y: newY
+      });
+
+    } else if (mode === 'time') {
+      processedPoints.push({ ...pt });
+
+    } else {
+      // Discard mode
+      if (pt.y >= yMin && pt.y <= yMax) {
+        if (blankGaps && gapSinceLastKept && processedPoints.length > 0) {
+          // Add blanked transit point at current coordinate
+          processedPoints.push({
+            ...pt,
+            blanked: true
+          });
+        }
+        processedPoints.push({ ...pt });
+        gapSinceLastKept = false;
+      } else {
+        gapSinceLastKept = true;
+      }
+    }
+  }
+
+  if (processedPoints.length === 0) {
+    if (preserveAnimationTiming) {
+      processedPoints.push({
+        x: 0,
+        y: 0,
+        blanked: true,
+        lastPoint: true,
+        rawBytes: new Uint8Array(8)
+      });
+    } else {
+      return {
+        header: { ...frame.header, pointCount: 0 },
+        points: []
+      };
+    }
+  }
+
+  // Adjust lastPoint flag
+  const finalPoints = processedPoints.map((p, idx) => ({
+    ...p,
+    lastPoint: idx === processedPoints.length - 1
+  }));
+
+  return {
+    header: {
+      ...frame.header,
+      pointCount: finalPoints.length
+    },
+    points: finalPoints
+  };
+}

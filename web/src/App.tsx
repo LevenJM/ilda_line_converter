@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
   Upload, Trash2, Sliders, Play, Pause, SkipBack, SkipForward, 
-  Download, FileArchive, ShieldAlert, Cpu, Layers 
+  Download, FileArchive, ShieldAlert, Cpu, Layers, Columns, Eye
 } from 'lucide-react';
 import JSZip from 'jszip';
 import confetti from 'canvas-confetti';
 import { 
-  parseIlda, processIldaFile, 
+  parseIlda, processIldaFile, transformFrameForPreview,
   type ParsedIldaFile, type ProcessOptions, type IldaFrame 
 } from './utils/ildaParser';
 import { LaserCanvas } from './components/LaserCanvas';
@@ -18,8 +18,9 @@ export function App() {
   const [isPlaying, setIsPlaying] = useState<boolean>(true);
   const [playbackFps, setPlaybackFps] = useState<number>(30);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<'split' | 'processed' | 'original'>('split');
 
-  // Settings matching the Python version
+  // Settings matching Python version
   const [options, setOptions] = useState<ProcessOptions>({
     mode: 'discard',
     yMin: 0,
@@ -35,18 +36,17 @@ export function App() {
 
   const selectedFile = files[selectedFileIdx] || null;
 
-  // Real displayable frames (pointCount > 0 && formatCode != 2)
+  // Filter real displayable frames
   const displayableFrames: IldaFrame[] = useMemo(() => {
     if (!selectedFile) return [];
     return selectedFile.frames.filter(f => f.header.pointCount > 0 && f.header.formatCode !== 2);
   }, [selectedFile]);
 
-  // Keep frame index valid
   useEffect(() => {
     setCurrentFrameIdx(0);
   }, [selectedFileIdx]);
 
-  // Animation Loop for multi-frame laser preview
+  // Animation Loop for multi-frame playback
   const animTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
@@ -146,7 +146,18 @@ export function App() {
     }
   };
 
-  const currentFrame = displayableFrames[currentFrameIdx] || null;
+  const currentOriginalFrame = displayableFrames[currentFrameIdx] || null;
+
+  // Real-time transformed preview frame based on current active settings
+  const currentProcessedFrame = useMemo(() => {
+    if (!currentOriginalFrame || !selectedFile) return null;
+    return transformFrameForPreview(
+      currentOriginalFrame,
+      options,
+      selectedFile.minY,
+      selectedFile.maxY
+    );
+  }, [currentOriginalFrame, selectedFile, options]);
 
   return (
     <div className="min-h-screen bg-[#0f141c] text-gray-200 flex flex-col selection:bg-teal-500 selection:text-black">
@@ -160,10 +171,10 @@ export function App() {
             <h1 className="text-lg font-bold text-white tracking-wide flex items-center gap-2">
               ILDA Crowd Safety & Duration Tool
               <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-teal-950 text-teal-300 border border-teal-700/50">
-                Web Assembly / Client-Side
+                100% Client-Side
               </span>
             </h1>
-            <p className="text-xs text-gray-400">Crop, squash vertical bands, and normalize playback length for ILDA laser projectors</p>
+            <p className="text-xs text-gray-400">Interactive live before/after laser simulation, vertical cropping, squashing & duration normalizing</p>
           </div>
         </div>
 
@@ -180,10 +191,10 @@ export function App() {
       </header>
 
       {/* Main Content Layout */}
-      <main className="flex-1 max-w-7xl w-full mx-auto p-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+      <main className="flex-1 max-w-[1600px] w-full mx-auto p-6 grid grid-cols-1 xl:grid-cols-12 gap-6">
         
         {/* Left Column: File Manager & Parameters */}
-        <div className="lg:col-span-7 space-y-6">
+        <div className="xl:col-span-6 space-y-6">
           
           {/* File Upload / List Card */}
           <div className="bg-[#141b24] border border-gray-800 rounded-xl p-5 shadow-xl">
@@ -205,7 +216,7 @@ export function App() {
             <label className="border-2 border-dashed border-gray-700 hover:border-teal-500/60 rounded-xl p-6 flex flex-col items-center justify-center cursor-pointer bg-[#0f141c]/50 hover:bg-[#0f141c] transition group">
               <Upload className="w-8 h-8 text-gray-500 group-hover:text-teal-400 transition mb-2" />
               <span className="text-sm font-medium text-gray-300 group-hover:text-white">Click or drag & drop ILDA files here</span>
-              <span className="text-xs text-gray-500 mt-1">Supports Format 0, 1, 4, 5 (.ild)</span>
+              <span className="text-xs text-gray-500 mt-1">Supports standard Format 0, 1, 4, 5 (.ild)</span>
               <input
                 type="file"
                 multiple
@@ -217,7 +228,7 @@ export function App() {
 
             {/* File List */}
             {files.length > 0 && (
-              <div className="mt-4 max-h-52 overflow-y-auto space-y-1.5 pr-1">
+              <div className="mt-4 max-h-48 overflow-y-auto space-y-1.5 pr-1">
                 {files.map((f, idx) => (
                   <div
                     key={idx}
@@ -266,9 +277,9 @@ export function App() {
             {/* Mode selection radio cards */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
-                { id: 'discard', title: 'Discard Out-of-bounds', desc: 'Drops points exceeding safety ceiling' },
-                { id: 'squash', title: 'Squash (Vertical Scale)', desc: 'Compresses geometry into safety band' },
-                { id: 'time', title: 'Duration Only', desc: 'Leaves geometry intact, loop/trim length' }
+                { id: 'discard', title: 'Discard (Crop)', desc: 'Drops points exceeding safety ceiling' },
+                { id: 'squash', title: 'Squash (Scale)', desc: 'Compresses vertical geometry to fit band' },
+                { id: 'time', title: 'Duration Only', desc: 'Leaves geometry intact, adjusts timing' }
               ].map((m) => (
                 <button
                   key={m.id}
@@ -276,7 +287,7 @@ export function App() {
                   onClick={() => setOptions({ ...options, mode: m.id as any })}
                   className={`p-3 text-left rounded-xl border transition flex flex-col justify-between ${
                     options.mode === m.id
-                      ? 'bg-teal-950/40 border-teal-500/70 text-white shadow-sm'
+                      ? 'bg-teal-950/50 border-teal-500 text-white shadow-md ring-1 ring-teal-500/30'
                       : 'bg-[#18202c]/60 border-gray-800 text-gray-400 hover:border-gray-700'
                   }`}
                 >
@@ -292,8 +303,8 @@ export function App() {
                 {/* Min Y */}
                 <div>
                   <div className="flex justify-between items-center text-xs mb-1.5">
-                    <span className="text-gray-300 font-medium">Min Y Coordinate (0 = Center):</span>
-                    <span className="font-mono text-teal-400">{options.yMin}</span>
+                    <span className="text-gray-300 font-medium">Min Y Coordinate (Floor):</span>
+                    <span className="font-mono text-teal-400 font-bold">{options.yMin}</span>
                   </div>
                   <input
                     type="range"
@@ -315,7 +326,7 @@ export function App() {
                 <div>
                   <div className="flex justify-between items-center text-xs mb-1.5">
                     <span className="text-gray-300 font-medium">Max Y Safety Ceiling:</span>
-                    <span className="font-mono text-teal-400">{options.yMax}</span>
+                    <span className="font-mono text-teal-400 font-bold">{options.yMax}</span>
                   </div>
                   <input
                     type="range"
@@ -328,12 +339,38 @@ export function App() {
                   />
                   <div className="flex justify-between text-[10px] text-gray-500 mt-1">
                     <span>-32768</span>
-                    <span>15000 (Default safety)</span>
+                    <span>15000 (Safety ceiling)</span>
                     <span>32767</span>
                   </div>
                 </div>
 
-                {/* Discard mode specific checkboxes */}
+                {/* Quick Presets */}
+                <div className="flex items-center gap-2 pt-1">
+                  <span className="text-[11px] text-gray-400">Quick Presets:</span>
+                  <button
+                    type="button"
+                    onClick={() => setOptions({ ...options, yMin: 0, yMax: 15000 })}
+                    className="px-2.5 py-1 rounded text-[11px] bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300"
+                  >
+                    Crowd Safe (0 to 15k)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOptions({ ...options, yMin: -10000, yMax: 20000 })}
+                    className="px-2.5 py-1 rounded text-[11px] bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300"
+                  >
+                    Mid-Band (-10k to 20k)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setOptions({ ...options, yMin: 0, yMax: 32767 })}
+                    className="px-2.5 py-1 rounded text-[11px] bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300"
+                  >
+                    Upper Half (0 to 32.7k)
+                  </button>
+                </div>
+
+                {/* Discard mode options */}
                 {options.mode === 'discard' && (
                   <div className="space-y-2 pt-2">
                     <label className="flex items-center space-x-2.5 text-xs text-gray-300 cursor-pointer">
@@ -353,7 +390,7 @@ export function App() {
                         onChange={(e) => setOptions({ ...options, blankGaps: e.target.checked })}
                         className="rounded bg-gray-800 border-gray-700 text-teal-500 focus:ring-0"
                       />
-                      <span>Blank gaps (don't draw connecting laser line across discarded spans)</span>
+                      <span>Blank transit gaps (don't draw connecting laser beam across discarded regions)</span>
                     </label>
                   </div>
                 )}
@@ -432,7 +469,7 @@ export function App() {
                 className="flex-1 py-3 px-4 rounded-xl font-bold text-sm bg-gradient-to-r from-teal-500 to-emerald-500 hover:from-teal-400 hover:to-emerald-400 text-gray-950 shadow-lg shadow-teal-500/20 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 transition"
               >
                 <FileArchive className="w-4 h-4" />
-                {isProcessing ? 'Generating...' : `Export All as ZIP (${files.length})`}
+                {isProcessing ? 'Processing & Zipping...' : `Export All as ZIP (${files.length})`}
               </button>
 
               {selectedFile && (
@@ -449,28 +486,96 @@ export function App() {
           </div>
         </div>
 
-        {/* Right Column: Laser Visualizer */}
-        <div className="lg:col-span-5 flex flex-col space-y-4">
+        {/* Right Column: Interactive Visualizer (Before & After Preview) */}
+        <div className="xl:col-span-6 flex flex-col space-y-4">
           <div className="bg-[#141b24] border border-gray-800 rounded-xl p-5 shadow-xl flex-1 flex flex-col">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-400 flex items-center gap-2">
-                <ShieldAlert className="w-4 h-4" /> Laser Visualizer
-              </h2>
-              {selectedFile && (
-                <span className="text-xs text-gray-400 font-mono">
-                  Frame {currentFrameIdx + 1} / {displayableFrames.length || 1}
-                </span>
-              )}
+            
+            {/* Visualizer Toolbar */}
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+              <div className="flex items-center space-x-2">
+                <ShieldAlert className="w-4 h-4 text-teal-400" />
+                <h2 className="text-sm font-semibold uppercase tracking-wider text-teal-400">
+                  Laser Preview
+                </h2>
+              </div>
+
+              {/* View Mode Switcher */}
+              <div className="flex items-center bg-[#0f141c] p-1 rounded-lg border border-gray-800 text-xs">
+                <button
+                  onClick={() => setViewMode('split')}
+                  className={`px-3 py-1 rounded-md flex items-center gap-1.5 transition ${
+                    viewMode === 'split' ? 'bg-teal-500 text-black font-semibold shadow-sm' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Columns className="w-3.5 h-3.5" /> Side-by-Side
+                </button>
+                <button
+                  onClick={() => setViewMode('processed')}
+                  className={`px-3 py-1 rounded-md flex items-center gap-1.5 transition ${
+                    viewMode === 'processed' ? 'bg-teal-500 text-black font-semibold shadow-sm' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  <Eye className="w-3.5 h-3.5" /> Processed Only
+                </button>
+                <button
+                  onClick={() => setViewMode('original')}
+                  className={`px-3 py-1 rounded-md flex items-center gap-1.5 transition ${
+                    viewMode === 'original' ? 'bg-teal-500 text-black font-semibold shadow-sm' : 'text-gray-400 hover:text-white'
+                  }`}
+                >
+                  Original Only
+                </button>
+              </div>
             </div>
 
-            {/* Canvas */}
+            {/* Canvases View */}
             <div className="flex-1 flex items-center justify-center">
-              <LaserCanvas
-                frame={currentFrame}
-                palette={selectedFile?.palette}
-                options={options}
-                showCropOverlay={true}
-              />
+              {viewMode === 'split' ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
+                  <LaserCanvas
+                    frame={currentOriginalFrame}
+                    palette={selectedFile?.palette}
+                    options={options}
+                    showCropOverlay={true}
+                    label="Original Frame"
+                    badge="Input"
+                    subtext={currentOriginalFrame ? `${currentOriginalFrame.points.length} pts` : ''}
+                  />
+                  <LaserCanvas
+                    frame={currentProcessedFrame}
+                    palette={selectedFile?.palette}
+                    options={options}
+                    showCropOverlay={false}
+                    label="Processed Preview"
+                    badge={options.mode.toUpperCase()}
+                    subtext={currentProcessedFrame ? `${currentProcessedFrame.points.length} pts` : ''}
+                  />
+                </div>
+              ) : viewMode === 'processed' ? (
+                <div className="max-w-[480px] w-full mx-auto">
+                  <LaserCanvas
+                    frame={currentProcessedFrame}
+                    palette={selectedFile?.palette}
+                    options={options}
+                    showCropOverlay={false}
+                    label="Processed Preview"
+                    badge={options.mode.toUpperCase()}
+                    subtext={currentProcessedFrame ? `${currentProcessedFrame.points.length} pts` : ''}
+                  />
+                </div>
+              ) : (
+                <div className="max-w-[480px] w-full mx-auto">
+                  <LaserCanvas
+                    frame={currentOriginalFrame}
+                    palette={selectedFile?.palette}
+                    options={options}
+                    showCropOverlay={true}
+                    label="Original Frame (with bounds)"
+                    badge="Input"
+                    subtext={currentOriginalFrame ? `${currentOriginalFrame.points.length} pts` : ''}
+                  />
+                </div>
+              )}
             </div>
 
             {/* Playback & Frame Slider */}
@@ -499,6 +604,9 @@ export function App() {
                     >
                       <SkipForward className="w-4 h-4" />
                     </button>
+                    <span className="text-xs text-gray-400 font-mono ml-2">
+                      Frame {currentFrameIdx + 1} / {displayableFrames.length}
+                    </span>
                   </div>
 
                   {/* FPS Slider */}
@@ -531,13 +639,15 @@ export function App() {
               </div>
             )}
 
-            {/* Metadata Info badge */}
-            {selectedFile && currentFrame && (
-              <div className="mt-4 p-3 rounded-lg bg-[#0f141c] border border-gray-800 text-[11px] text-gray-400 grid grid-cols-2 gap-2 font-mono">
-                <div>Format: Code {currentFrame.header.formatCode}</div>
-                <div>Points: {currentFrame.header.pointCount}</div>
-                <div>Global Y: {selectedFile.minY} .. {selectedFile.maxY}</div>
-                <div>Company: {currentFrame.header.companyName || 'N/A'}</div>
+            {/* Live Point Metrics Summary */}
+            {selectedFile && currentOriginalFrame && currentProcessedFrame && (
+              <div className="mt-4 p-3 rounded-lg bg-[#0f141c] border border-gray-800 text-[11px] text-gray-400 grid grid-cols-2 sm:grid-cols-4 gap-2 font-mono">
+                <div>Original: <span className="text-gray-200">{currentOriginalFrame.points.length} pts</span></div>
+                <div>Processed: <span className="text-teal-400">{currentProcessedFrame.points.length} pts</span></div>
+                <div>Diff: <span className={currentProcessedFrame.points.length < currentOriginalFrame.points.length ? "text-rose-400" : "text-gray-200"}>
+                  {currentProcessedFrame.points.length - currentOriginalFrame.points.length} pts
+                </span></div>
+                <div>File Y: <span className="text-gray-200">[{selectedFile.minY}..{selectedFile.maxY}]</span></div>
               </div>
             )}
           </div>

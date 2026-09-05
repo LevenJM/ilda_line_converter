@@ -7,13 +7,19 @@ interface LaserCanvasProps {
   palette?: [number, number, number][];
   options: ProcessOptions;
   showCropOverlay?: boolean;
+  label?: string;
+  badge?: string;
+  subtext?: string;
 }
 
 export const LaserCanvas: React.FC<LaserCanvasProps> = ({
   frame,
   palette = DEFAULT_ILDA_PALETTE,
   options,
-  showCropOverlay = true
+  showCropOverlay = true,
+  label,
+  badge,
+  subtext
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
@@ -31,7 +37,7 @@ export const LaserCanvas: React.FC<LaserCanvasProps> = ({
     ctx.fillRect(0, 0, width, height);
 
     // Draw Grid & Axes
-    ctx.strokeStyle = '#1a2230';
+    ctx.strokeStyle = '#151d28';
     ctx.lineWidth = 1;
     ctx.beginPath();
     // Grid lines
@@ -44,7 +50,7 @@ export const LaserCanvas: React.FC<LaserCanvasProps> = ({
     ctx.stroke();
 
     // Center crosshairs
-    ctx.strokeStyle = '#253549';
+    ctx.strokeStyle = '#222f3e';
     ctx.beginPath();
     ctx.moveTo(width / 2, 0); ctx.lineTo(width / 2, height);
     ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2);
@@ -61,18 +67,18 @@ export const LaserCanvas: React.FC<LaserCanvasProps> = ({
       const bandHeight = bottomY - topY;
 
       // Inverted / active band
-      ctx.fillStyle = 'rgba(0, 255, 204, 0.08)';
+      ctx.fillStyle = 'rgba(0, 255, 204, 0.06)';
       ctx.fillRect(0, topY, width, bandHeight);
 
       // Excluded regions
-      ctx.fillStyle = 'rgba(255, 0, 70, 0.05)';
+      ctx.fillStyle = 'rgba(255, 0, 70, 0.06)';
       ctx.fillRect(0, 0, width, topY); // Above max
       ctx.fillRect(0, bottomY, width, height - bottomY); // Below min
 
       // Min/Max Boundary lines
       ctx.setLineDash([4, 4]);
       ctx.strokeStyle = '#00ffcc';
-      ctx.lineWidth = 1.5;
+      ctx.lineWidth = 1.2;
 
       ctx.beginPath();
       ctx.moveTo(0, topY); ctx.lineTo(width, topY);
@@ -83,15 +89,15 @@ export const LaserCanvas: React.FC<LaserCanvasProps> = ({
       // Labels
       ctx.font = '10px monospace';
       ctx.fillStyle = '#00ffcc';
-      ctx.fillText(`Max Y: ${options.yMax}`, 8, Math.min(height - 8, Math.max(14, topY - 4)));
-      ctx.fillText(`Min Y: ${options.yMin}`, 8, Math.min(height - 8, Math.max(14, bottomY + 12)));
+      ctx.fillText(`Max: ${options.yMax}`, 8, Math.min(height - 8, Math.max(14, topY - 4)));
+      ctx.fillText(`Min: ${options.yMin}`, 8, Math.min(height - 8, Math.max(14, bottomY + 12)));
     }
 
     if (!frame || frame.points.length === 0) {
       ctx.fillStyle = '#4a5568';
-      ctx.font = '13px sans-serif';
+      ctx.font = '12px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('No laser points to display', width / 2, height / 2);
+      ctx.fillText('No laser points', width / 2, height / 2);
       ctx.textAlign = 'start';
       return;
     }
@@ -152,13 +158,28 @@ export const LaserCanvas: React.FC<LaserCanvasProps> = ({
   }, [frame, palette, options, showCropOverlay]);
 
   return (
-    <div className="relative border border-gray-800 rounded-xl overflow-hidden shadow-2xl bg-black flex items-center justify-center">
-      <canvas
-        ref={canvasRef}
-        width={480}
-        height={480}
-        className="w-full max-w-[480px] aspect-square object-contain block"
-      />
+    <div className="relative flex flex-col items-center w-full">
+      {label && (
+        <div className="w-full flex items-center justify-between mb-2 px-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-semibold uppercase tracking-wider text-gray-300">{label}</span>
+            {badge && (
+              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-teal-950 text-teal-300 border border-teal-800/60">
+                {badge}
+              </span>
+            )}
+          </div>
+          {subtext && <span className="text-[11px] text-gray-500 font-mono">{subtext}</span>}
+        </div>
+      )}
+      <div className="relative border border-gray-800 rounded-xl overflow-hidden shadow-2xl bg-black flex items-center justify-center w-full aspect-square">
+        <canvas
+          ref={canvasRef}
+          width={400}
+          height={400}
+          className="w-full h-full object-contain block"
+        />
+      </div>
     </div>
   );
 };
