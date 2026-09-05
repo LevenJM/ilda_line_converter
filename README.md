@@ -1,65 +1,63 @@
-# ILDA Line Converter & Safety Cropper
+# ILDA Studio & Safety Cropper
 
-A batch processing tool and graphical interface for restricting the vertical (Y) coordinate range of ILDA (`.ild`) laser show files. 
+A batch processing tool, desktop application, and web application for restricting the vertical (Y) coordinate range of ILDA (`.ild`) laser show files and normalizing playback durations.
 
-This utility helps keep projections strictly within a designated horizontal band (for example, above the audience's heads for crowd safety) by either **discarding** coordinates outside the bounds or **squashing** (scaling) the entire projection vertically to fit.
+This utility keeps projections strictly within a designated horizontal band (for example, above audience heads for crowd safety) by either **cropping** coordinates outside the bounds or **squashing** (scaling) the entire projection vertically to fit.
+
+🌐 **Live Web Application:** [https://levenjm.github.io/ilda_line_converter/](https://levenjm.github.io/ilda_line_converter/)
 
 ---
 
 ## Features
 
-- **Batch Processing:** Load and process multiple ILDA files simultaneously.
+- **Web Application (React + Vite):** Hosted on GitHub Pages, featuring interactive live side-by-side vector visualization, playback controls, and client-side batch processing with ZIP export.
+- **Desktop GUI (Python + Tkinter):** Native offline interface with folder creation, file list management, and preset controls.
+- **CLI Utility (`crop_ilda.py`):** Scriptable for automated workflows or pipelines.
 - **Three Processing Modes:**
-  - **Discard:** Drops any points that fall outside the target vertical band. Re-calculates end-of-frame flags dynamically. Where points are removed, a **blanked travel point** is inserted so the laser moves dark across the gap instead of drawing a straight line between the surviving endpoints (disable with `--no-blank-gaps`).
-  - **Squash:** Scans the file to find global vertical limits and scales all coordinates proportionally to fit exactly inside your safety band.
-  - **Set Duration (time):** Leaves the geometry untouched and only adjusts how long each file plays. Useful for SD-card players that run each clip too briefly.
-- **Target Playback Duration:** Make every file run for a chosen number of seconds. Playback time is estimated from `total points ÷ scan rate`; files shorter than the target are **repeated** and files longer than it are **trimmed** at the nearest frame boundary to land as close as possible to the target. The `frame_num`/`total_frames` headers are renumbered so the player honors the new length. Available on its own (Set Duration mode) or alongside cropping.
-  - **Direction control:** choose **Lengthen** (only extend shorter files), **Trim** (only shorten longer files), or both. Files that would need a disallowed change are left untouched.
-- **Animation Timing Protection:** In *Discard* mode, if a frame ends up empty, a single blanked (laser-off) dummy point is inserted to keep the animation frames synced and prevent playback speed issues.
-- **ILDA Standard Compliance:** Parses and outputs Format 0 (3D indexed), Format 1 (2D indexed), Format 4 (3D True Color/RGB), and Format 5 (2D True Color/RGB).
-- **Modern Desktop GUI:** Built with Python's native Tkinter, featuring a clean dark-mode interface and simple sliders.
+  - **Discard (Crop):** Drops points that fall outside the target vertical band. Automatically recalculates end-of-frame flags and inserts blanked travel points across removed gaps to prevent beam travel lines.
+  - **Squash (Scale):** Analyzes the file's global vertical bounds and scales all Y coordinates proportionally to fit exactly inside your safety band.
+  - **Set Duration (Time Only):** Leaves geometry untouched and repeats or trims frames so the file plays for a target duration at a given scanner scan rate (kpps).
+- **Target Playback Duration Normalization:** Repeats or trims frames to match a specific duration in seconds based on scan rate (kpps). Includes direction controls (Lengthen, Trim, or Both).
+- **ILDA Standard Compliance:** Full support for Format 0 (3D indexed), Format 1 (2D indexed), Format 4 (3D True Color RGB), and Format 5 (2D True Color RGB).
 
 ---
 
-## Requirements
+## Interfaces
 
-- **Python 3.x**
-- **Tkinter** (usually comes pre-installed with Python. On Linux systems like Ubuntu/Debian, if missing, install it via: `sudo apt-get install python3-tk`)
+### 1. Web Studio (Zero Installation)
 
----
+Open **[https://levenjm.github.io/ilda_line_converter/](https://levenjm.github.io/ilda_line_converter/)** in any modern web browser.
 
-## Installation
+- Drag and drop `.ild` files.
+- Inspect frames with the live vector canvas and before/after split view.
+- Tweak Y Min/Max thresholds or choose presets.
+- Export individual processed files or download a batch `.zip`.
 
-No external library dependencies are required. Clone or copy the folder contents to your local system and ensure the scripts have execute permissions:
-
+To run the web app locally:
 ```bash
-chmod +x crop_ilda.py ilda_cropper_gui.py
+cd web
+npm install
+npm run dev
 ```
 
 ---
 
-## Usage
+### 2. Desktop GUI
 
-### 1. Graphical Interface (Recommended)
-
-To open the user-friendly desktop application:
+Requires Python 3 (with Tkinter):
 
 ```bash
 ./ilda_cropper_gui.py
 ```
 
-- **Add Files:** Click "Add ILDA Files" to load multiple files into the listbox.
-- **Settings:** 
-  - Choose between **Discard** or **Squash** mode.
-  - Adjust the **Min Y** and **Max Y** boundaries (ILDA range is `-32768` (bottom) to `32767` (top), where `0` is the center).
-- **Output:** Choose to save output files in the same folder (appends `_processed`) or select a custom output folder.
-- **Process:** Click **Process Files** to execute.
+- Add files or folders.
+- Choose Discard or Squash mode.
+- Set output destination or auto-create a new output folder.
+- Process batch files directly on your local filesystem.
 
 ---
 
-### 2. Command Line Interface
-
-You can run the script programmatically or write automated scripts.
+### 3. Command Line Interface
 
 ```bash
 ./crop_ilda.py -i input.ild -o output.ild --ymin 0 --ymax 15000 --mode squash
@@ -74,34 +72,26 @@ You can run the script programmatically or write automated scripts.
 | `--ymin` | Lower Y coordinate boundary | `0` |
 | `--ymax` | Upper Y coordinate boundary | `15000` |
 | `--mode` | Processing mode: `discard`, `squash`, or `time` | `discard` |
-| `--discard-empty-frames` | Skip empty frames completely instead of writing a blanked dummy point (Discard mode only) | `False` |
-| `--no-blank-gaps` | Discard mode: do **not** insert a blanked travel point where points were removed (reverts to drawing a line across the gap) | `False` |
-| `--seconds` | Target playback duration in seconds. Repeats short files / trims long ones to run ~this long. Required for `--mode time`; optional with discard/squash. | `None` |
-| `--scan-rate-kpps` | Scan rate (kpps) used to estimate playback time for `--seconds`. **Set this to match the scan rate in your `.prg` file** for accurate timing. | `30` |
-| `--resize` | Direction for `--seconds`: `extend` only lengthens shorter files, `trim` only shortens longer files, `both` does either. | `both` |
-
-#### Example: make every file run for ~10 seconds (no cropping)
-
-```bash
-./crop_ilda.py -i input.ild -o output.ild --mode time --seconds 10 --scan-rate-kpps 10
-```
-
-> **Note on timing accuracy:** the duration is an estimate based on `total points ÷ scan rate`. If your player runs files faster or slower than expected, adjust `--scan-rate-kpps` to match your `.prg` and the real-world result will track it.
+| `--discard-empty-frames` | Skip empty frames instead of writing a blanked dummy point | `False` |
+| `--no-blank-gaps` | Do not insert blanked travel points across gaps | `False` |
+| `--seconds` | Target playback duration in seconds | `None` |
+| `--scan-rate-kpps` | Scan rate (kpps) used to estimate duration | `30` |
+| `--resize` | Direction: `extend`, `trim`, or `both` | `both` |
 
 ---
 
 ## Coordinate Reference
 
 ILDA coordinates use signed 16-bit integers:
-- `32767` -> Top of scanner window
+- `+32767` -> Top of scanner window
 - `0` -> Vertical Center
 - `-32768` -> Bottom of scanner window
 
-For crowd safety lines, mapping a band like `0` (center) to `15000` (about halfway up the top half of the projection area) keeps the beam high and level above head height.
+For crowd safety lines, mapping a band like `0` (center) to `15000` keeps laser beams above audience height.
 
 ---
 
 ## Safety Disclaimer
 
 > [!WARNING]
-> While this tool alters the coordinates of your ILDA files, **always test your show files with the laser output disabled or at a safe test orientation** first. Software modifications cannot compensate for incorrect physical projector alignment, hardware failures, or scanner drift. Always verify safety zoning configuration on your laser DAC or projector.
+> While this tool alters the coordinates of your ILDA files, **always test your show files with the laser output disabled or at a safe test orientation** first. Software modifications cannot compensate for incorrect physical projector alignment, hardware failures, or scanner drift. Always verify safety zoning configuration on your laser DAC or projector hardware.
