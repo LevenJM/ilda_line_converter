@@ -32,15 +32,14 @@ export const LaserCanvas: React.FC<LaserCanvasProps> = ({
     const width = canvas.width;
     const height = canvas.height;
 
-    // Clear background
-    ctx.fillStyle = '#080c10';
+    // Grounded dark slate-gray canvas background
+    ctx.fillStyle = '#0e1117';
     ctx.fillRect(0, 0, width, height);
 
-    // Draw Grid & Axes
-    ctx.strokeStyle = '#151d28';
+    // Subtle technical grid
+    ctx.strokeStyle = '#181e28';
     ctx.lineWidth = 1;
     ctx.beginPath();
-    // Grid lines
     for (let i = 1; i < 4; i++) {
       const gx = (width / 4) * i;
       const gy = (height / 4) * i;
@@ -50,7 +49,7 @@ export const LaserCanvas: React.FC<LaserCanvasProps> = ({
     ctx.stroke();
 
     // Center crosshairs
-    ctx.strokeStyle = '#222f3e';
+    ctx.strokeStyle = '#222b3a';
     ctx.beginPath();
     ctx.moveTo(width / 2, 0); ctx.lineTo(width / 2, height);
     ctx.moveTo(0, height / 2); ctx.lineTo(width, height / 2);
@@ -66,19 +65,19 @@ export const LaserCanvas: React.FC<LaserCanvasProps> = ({
       const bottomY = mapY(options.yMin);
       const bandHeight = bottomY - topY;
 
-      // Inverted / active band
-      ctx.fillStyle = 'rgba(0, 255, 204, 0.06)';
+      // Active zone
+      ctx.fillStyle = 'rgba(56, 189, 248, 0.04)';
       ctx.fillRect(0, topY, width, bandHeight);
 
-      // Excluded regions
-      ctx.fillStyle = 'rgba(255, 0, 70, 0.06)';
-      ctx.fillRect(0, 0, width, topY); // Above max
-      ctx.fillRect(0, bottomY, width, height - bottomY); // Below min
+      // Excluded zones
+      ctx.fillStyle = 'rgba(239, 68, 68, 0.04)';
+      ctx.fillRect(0, 0, width, topY);
+      ctx.fillRect(0, bottomY, width, height - bottomY);
 
-      // Min/Max Boundary lines
-      ctx.setLineDash([4, 4]);
-      ctx.strokeStyle = '#00ffcc';
-      ctx.lineWidth = 1.2;
+      // Safety ceiling and floor lines
+      ctx.setLineDash([3, 3]);
+      ctx.strokeStyle = 'rgba(56, 189, 248, 0.6)';
+      ctx.lineWidth = 1;
 
       ctx.beginPath();
       ctx.moveTo(0, topY); ctx.lineTo(width, topY);
@@ -86,23 +85,23 @@ export const LaserCanvas: React.FC<LaserCanvasProps> = ({
       ctx.stroke();
       ctx.setLineDash([]);
 
-      // Labels
-      ctx.font = '10px monospace';
-      ctx.fillStyle = '#00ffcc';
-      ctx.fillText(`Max: ${options.yMax}`, 8, Math.min(height - 8, Math.max(14, topY - 4)));
-      ctx.fillText(`Min: ${options.yMin}`, 8, Math.min(height - 8, Math.max(14, bottomY + 12)));
+      // Precision technical coordinate annotations
+      ctx.font = '10px var(--font-mono, monospace)';
+      ctx.fillStyle = 'rgba(148, 163, 184, 0.8)';
+      ctx.fillText(`Y_MAX ${options.yMax > 0 ? '+' : ''}${options.yMax}`, 8, Math.min(height - 8, Math.max(14, topY - 4)));
+      ctx.fillText(`Y_MIN ${options.yMin > 0 ? '+' : ''}${options.yMin}`, 8, Math.min(height - 8, Math.max(14, bottomY + 12)));
     }
 
     if (!frame || frame.points.length === 0) {
-      ctx.fillStyle = '#4a5568';
-      ctx.font = '12px sans-serif';
+      ctx.fillStyle = '#475569';
+      ctx.font = '11px var(--font-mono, monospace)';
       ctx.textAlign = 'center';
-      ctx.fillText('No laser points', width / 2, height / 2);
+      ctx.fillText('NO DATA', width / 2, height / 2);
       ctx.textAlign = 'start';
       return;
     }
 
-    // Draw Laser Path
+    // Laser Path Render
     const points = frame.points;
     let prevPoint: { x: number; y: number } | null = null;
 
@@ -114,42 +113,41 @@ export const LaserCanvas: React.FC<LaserCanvasProps> = ({
       const curX = mapX(pt.x);
       const curY = mapY(pt.y);
 
-      // Determine color
-      let strokeColor = '#00ffcc';
+      let strokeColor = '#38bdf8';
       if (pt.r !== undefined && pt.g !== undefined && pt.b !== undefined) {
         strokeColor = `rgb(${pt.r}, ${pt.g}, ${pt.b})`;
       } else if (pt.colorIndex !== undefined) {
-        const palColor = palette[pt.colorIndex % palette.length] || [0, 255, 204];
+        const palColor = palette[pt.colorIndex % palette.length] || [56, 189, 248];
         strokeColor = `rgb(${palColor[0]}, ${palColor[1]}, ${palColor[2]})`;
       }
 
       if (prevPoint && !pt.blanked) {
-        // Laser beam glow
+        // Subtle trace bloom (natural laser phosphorescence)
         ctx.shadowColor = strokeColor;
-        ctx.shadowBlur = 6;
+        ctx.shadowBlur = 4;
         ctx.strokeStyle = strokeColor;
-        ctx.lineWidth = 2;
+        ctx.lineWidth = 1.6;
 
         ctx.beginPath();
         ctx.moveTo(prevPoint.x, prevPoint.y);
         ctx.lineTo(curX, curY);
         ctx.stroke();
 
-        // Inner bright core
+        // Core line
         ctx.shadowBlur = 0;
         ctx.strokeStyle = '#ffffff';
-        ctx.lineWidth = 0.8;
+        ctx.lineWidth = 0.7;
         ctx.beginPath();
         ctx.moveTo(prevPoint.x, prevPoint.y);
         ctx.lineTo(curX, curY);
         ctx.stroke();
       }
 
-      // If point is not blanked, render a small illuminated point
+      // Point illumination
       if (!pt.blanked) {
         ctx.fillStyle = strokeColor;
         ctx.beginPath();
-        ctx.arc(curX, curY, 1.5, 0, Math.PI * 2);
+        ctx.arc(curX, curY, 1.2, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -158,21 +156,23 @@ export const LaserCanvas: React.FC<LaserCanvasProps> = ({
   }, [frame, palette, options, showCropOverlay]);
 
   return (
-    <div className="relative flex flex-col items-center w-full">
+    <div className="flex flex-col w-full">
       {label && (
-        <div className="w-full flex items-center justify-between mb-2 px-1">
+        <div className="flex items-center justify-between py-1.5 px-0.5 mb-1.5 border-b border-slate-800/80">
           <div className="flex items-center gap-2">
-            <span className="text-xs font-semibold uppercase tracking-wider text-gray-300">{label}</span>
+            <span className="text-[11px] font-medium tracking-wider uppercase text-slate-300 font-heading">
+              {label}
+            </span>
             {badge && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded font-mono bg-teal-950 text-teal-300 border border-teal-800/60">
+              <span className="text-[10px] px-1.5 py-0.2 rounded font-mono bg-slate-800 text-slate-300 border border-slate-700/60">
                 {badge}
               </span>
             )}
           </div>
-          {subtext && <span className="text-[11px] text-gray-500 font-mono">{subtext}</span>}
+          {subtext && <span className="text-[11px] text-slate-400 font-mono">{subtext}</span>}
         </div>
       )}
-      <div className="relative border border-gray-800 rounded-xl overflow-hidden shadow-2xl bg-black flex items-center justify-center w-full aspect-square">
+      <div className="relative border border-slate-800/90 rounded-lg overflow-hidden bg-[#0e1117] flex items-center justify-center w-full aspect-square">
         <canvas
           ref={canvasRef}
           width={400}
