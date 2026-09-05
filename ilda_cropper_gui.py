@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import os
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk, simpledialog
 from crop_ilda import process_ilda
 
 class IldaCropperGUI:
@@ -19,19 +19,75 @@ class IldaCropperGUI:
         self.update_mode_ui()
         
     def setup_styles(self):
-        # Configure a dark/modern theme
-        self.root.configure(bg="#2d2d2d")
+        # Configure selection highlight colors globally for standard Tk widgets (like Entry selection and Listbox selection)
+        self.root.option_add('*selectBackground', '#007acc')
+        self.root.option_add('*selectForeground', '#ffffff')
+        self.root.option_add('*Entry.Background', '#252526')
+        self.root.option_add('*Entry.Foreground', '#ffffff')
+        
+        # Configure a dark theme
+        self.root.configure(bg="#1e1e1e")
         self.style = ttk.Style()
         self.style.theme_use('clam')
         
-        # Configure styles
-        self.style.configure(".", background="#2d2d2d", foreground="#ffffff")
-        self.style.configure("TLabel", background="#2d2d2d", foreground="#ffffff", font=("Helvetica", 10))
-        self.style.configure("Header.TLabel", background="#2d2d2d", foreground="#00ffcc", font=("Helvetica", 14, "bold"))
-        self.style.configure("TButton", background="#4a4a4a", foreground="#ffffff", borderwidth=1, font=("Helvetica", 10))
-        self.style.map("TButton", background=[("active", "#626262")])
-        self.style.configure("Action.TButton", background="#007acc", foreground="#ffffff", font=("Helvetica", 11, "bold"))
-        self.style.map("Action.TButton", background=[("active", "#0098ff")])
+        # Theme colors
+        bg_dark = "#1e1e1e"
+        bg_card = "#252526"
+        fg_white = "#ffffff"
+        accent_blue = "#007acc"
+        accent_active = "#1c97ea"
+        border_color = "#3c3c3c"
+        
+        # Global style configuration
+        self.style.configure(".", background=bg_dark, foreground=fg_white, bordercolor=border_color, lightcolor=border_color, darkcolor=border_color)
+        
+        # Labels
+        self.style.configure("TLabel", background=bg_dark, foreground=fg_white, font=("Helvetica", 10))
+        self.style.configure("Header.TLabel", background=bg_dark, foreground="#00ffcc", font=("Helvetica", 14, "bold"))
+        
+        # LabelFrames
+        self.style.configure("TLabelframe", background=bg_dark, foreground=fg_white, bordercolor=border_color, borderwidth=1)
+        self.style.configure("TLabelframe.Label", background=bg_dark, foreground="#00ffcc", font=("Helvetica", 10, "bold"))
+        
+        # Buttons
+        self.style.configure("TButton", background=bg_card, foreground=fg_white, borderwidth=1, bordercolor=border_color, font=("Helvetica", 10), focuscolor="none")
+        self.style.map("TButton", 
+            background=[("active", "#333333"), ("disabled", "#151515")],
+            foreground=[("disabled", "#666666")],
+            bordercolor=[("active", accent_blue)]
+        )
+        
+        self.style.configure("Action.TButton", background=accent_blue, foreground=fg_white, font=("Helvetica", 11, "bold"), focuscolor="none", borderwidth=0)
+        self.style.map("Action.TButton", 
+            background=[("active", accent_active), ("disabled", "#151515")],
+            foreground=[("disabled", "#666666")]
+        )
+        
+        # Entry (Input Fields)
+        self.style.configure("TEntry", fieldbackground=bg_card, foreground=fg_white, insertcolor=fg_white, bordercolor=border_color, borderwidth=1)
+        self.style.map("TEntry", 
+            fieldbackground=[("focus", "#2d2d2d"), ("disabled", "#151515")],
+            bordercolor=[("focus", accent_blue)],
+            foreground=[("disabled", "#666666")]
+        )
+        
+        # Radio and Check Buttons
+        self.style.configure("TRadiobutton", background=bg_dark, foreground=fg_white, focuscolor="none")
+        self.style.map("TRadiobutton", 
+            background=[("active", bg_dark)],
+            foreground=[("active", fg_white), ("disabled", "#666666")]
+        )
+        self.style.configure("TCheckbutton", background=bg_dark, foreground=fg_white, focuscolor="none")
+        self.style.map("TCheckbutton", 
+            background=[("active", bg_dark)],
+            foreground=[("active", fg_white), ("disabled", "#666666")]
+        )
+        
+        # Scale (Sliders)
+        self.style.configure("Horizontal.TScale", background=bg_dark, troughcolor=bg_card, borderwidth=0)
+        
+        # Scrollbars
+        self.style.configure("TScrollbar", background=bg_card, troughcolor=bg_dark, arrowcolor=fg_white, borderwidth=0)
         
     def create_widgets(self):
         # Main Layout container
@@ -52,13 +108,16 @@ class IldaCropperGUI:
         self.scrollbar = ttk.Scrollbar(list_container, orient=tk.VERTICAL)
         self.file_listbox = tk.Listbox(
             list_container, 
-            bg="#1e1e1e", 
+            bg="#252526", 
             fg="#ffffff", 
             selectbackground="#007acc", 
             selectforeground="#ffffff",
-            highlightthickness=0,
+            highlightthickness=1,
+            highlightbackground="#3c3c3c",
+            highlightcolor="#007acc",
+            activestyle="none",
             yscrollcommand=self.scrollbar.set,
-            font=("Courier", 9)
+            font=("Courier", 10)
         )
         self.scrollbar.config(command=self.file_listbox.yview)
         
@@ -222,6 +281,9 @@ class IldaCropperGUI:
         self.out_dir_btn = ttk.Button(dir_select_container, text="Choose...", command=self.choose_output_dir, state=tk.DISABLED)
         self.out_dir_btn.pack(side=tk.LEFT)
         
+        self.new_dir_btn = ttk.Button(dir_select_container, text="New Folder...", command=self.create_output_dir, state=tk.DISABLED)
+        self.new_dir_btn.pack(side=tk.LEFT, padx=5)
+        
         # Action button and progress info
         action_container = ttk.Frame(main_frame)
         action_container.pack(fill=tk.X, side=tk.BOTTOM, pady=10)
@@ -260,10 +322,38 @@ class IldaCropperGUI:
             self.out_dir_lbl.config(text=os.path.basename(directory))
             
     def update_out_ui(self):
-        if self.out_type_var.get() == "custom":
-            self.out_dir_btn.config(state=tk.NORMAL)
-        else:
-            self.out_dir_btn.config(state=tk.DISABLED)
+        state = tk.NORMAL if self.out_type_var.get() == "custom" else tk.DISABLED
+        self.out_dir_btn.config(state=state)
+        self.new_dir_btn.config(state=state)
+        
+    def create_output_dir(self):
+        default_parent = os.getcwd()
+        if self.input_files:
+            default_parent = os.path.dirname(self.input_files[0])
+            
+        parent_dir = filedialog.askdirectory(
+            title="Select parent folder where new folder will be created",
+            initialdir=default_parent
+        )
+        if not parent_dir:
+            return
+            
+        new_folder_name = simpledialog.askstring(
+            "Create New Folder",
+            "Enter the name for the new folder:",
+            parent=self.root
+        )
+        if not new_folder_name:
+            return
+            
+        new_path = os.path.join(parent_dir, new_folder_name)
+        try:
+            os.makedirs(new_path, exist_ok=True)
+            self.output_directory = new_path
+            self.out_dir_lbl.config(text=os.path.basename(new_path))
+            messagebox.showinfo("Folder Created", f"Successfully created and selected:\n{new_path}")
+        except Exception as e:
+            messagebox.showerror("Error Creating Folder", f"Could not create folder:\n{str(e)}")
             
     def update_mode_ui(self):
         mode = self.mode_var.get()

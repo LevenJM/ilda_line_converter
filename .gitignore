@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+ilda_cropped/
+ilda_squashed/
+ilda_files/
+test_input.ild
+test_output.ild
