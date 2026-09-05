@@ -704,7 +704,7 @@ export function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-200 bg-white px-6 py-2.5 text-center text-xs text-slate-400">
-        ILDA Specification Compliant · All processing performed client-side in your browser
+        ILDA Specification Compliant
       </footer>
     </div>
   );
